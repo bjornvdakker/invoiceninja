@@ -1052,7 +1052,7 @@ class BasePaymentDriver
              */
             
             if($label == "Credit Card" && strpos($url, "mollie") !== false ){
-                $label == "Mollie";
+                $label = "Mollie";
             }
 
             $links[] = [
