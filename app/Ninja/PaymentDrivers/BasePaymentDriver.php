@@ -1041,8 +1041,19 @@ class BasePaymentDriver
             } else {
                 $label = trans('texts.payment_type_on_file', ['type' => $paymentMethod->payment_type->name]);
             }
-
+            
             $label .= $this->invoice()->present()->gatewayFee($paymentMethod->payment_type->gateway_type_id);
+
+            /**
+             * @ 26/03/2021 
+             *  Author : Jack Bayliss <jack@jackbayliss.com>
+             *  The label is taken from a translation - we confirm the label is set as Credit Card and it belongs to Mollie- then set the label as Mollie.
+             *  We don't want to overwrite "Credit Card" as a whole, as it could be the term used elsewhere in the application :)
+             */
+            
+            if($label == "Credit Card" && strpos($url, "mollie") !== false ){
+                $label == "Mollie";
+            }
 
             $links[] = [
                 'url' => $url,
