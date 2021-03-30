@@ -152,10 +152,11 @@ class BasePaymentDriver
             } else {
                 try {
                     $this->completeOnsitePurchase();
+                    
                 } catch (PaymentActionRequiredException $exception) {
                     return $this->startStepTwo($exception->getData(), $sourceId);
                 }
-
+                
                 if ($redirectUrl = session('redirect_url:' . $this->invitation->invitation_key)) {
                     $separator = strpos($redirectUrl, '?') === false ? '?' : '&';
 
@@ -384,11 +385,34 @@ class BasePaymentDriver
 
         return $this->doOmnipayOnsitePurchase($data, $paymentMethod);
     }
+/**
+     * @param string $amount
+     * @param string $currency_from
+     *
+     * @return string
+     * @throws Exception When currency doesnt exist.
+     */
+    protected function doConversion($amount,$currency_from){
+        $xmlex = new \SimpleXMLElement(file_get_contents("http://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml"));
+        $currencies = [];
+        foreach($xmlex->Cube->Cube->Cube as $xml){
+                $currencies[(string)$xml['currency']] = (string)$xml['rate'];
+        }
+        if(array_key_exists ($currency_from,$currencies)){
+            $conversion = $amount / $currencies[$currency_from];
+            return floor($conversion * 100) / 100;
+        }else {
+            throw new \Exception('Currency does not exist');
 
+        }
+    }
     protected function doOmnipayOnsitePurchase($data, $paymentMethod = false)
     {
+        if ( $this->accountGateway->gateway->provider  == "Mollie" && $this->client()->getCurrencyCode() !== "EUR") {
+            
+            $data['amount'] = $this->doConversion($data['amount'],$this->client()->getCurrencyCode());    
+        }
         $gateway = $this->gateway();
-
         // TODO move to payment driver class
         if ($this->isGateway(GATEWAY_SAGE_PAY_DIRECT) || $this->isGateway(GATEWAY_SAGE_PAY_SERVER)) {
             $items = null;
@@ -1041,33 +1065,20 @@ class BasePaymentDriver
             } else {
                 $label = trans('texts.payment_type_on_file', ['type' => $paymentMethod->payment_type->name]);
             }
-            
-            $label .= $this->invoice()->present()->gatewayFee($paymentMethod->payment_type->gateway_type_id);
 
-            /**
-             * @ 26/03/2021 
-             *  Author : Jack Bayliss <jack@jackbayliss.com>
-             *  The label is taken from a translation - we confirm the label is set as Credit Card and it belongs to Mollie- then set the label as Mollie.
-             *  We don't want to overwrite "Credit Card" as a whole, as it could be the term used elsewhere in the application :)
-             */
-            
-            if($label == "Credit Card" && strpos($url, "mollie") !== false ){
-                $label = "Mollie";
-            }
+            $label .= $this->invoice()->present()->gatewayFee($paymentMethod->payment_type->gateway_type_id);
 
             $links[] = [
                 'url' => $url,
                 'label' => $label,
             ];
         }
-
         return $links;
     }
 
     public function paymentLinks()
     {
         $links = [];
-
         foreach ($this->gatewayTypes() as $gatewayTypeId) {
             if ($gatewayTypeId === GATEWAY_TYPE_TOKEN) {
                 continue;
@@ -1098,14 +1109,17 @@ class BasePaymentDriver
             }
 
             $label .= $this->invoice()->present()->gatewayFee($gatewayTypeId);
-
+            
+        
+            if($label == "Credit Card" && $this->accountGateway->gateway->provider == "Mollie"){
+                $label = "Mollie";
+            }
             $links[] = [
                 'gatewayTypeId' => $gatewayTypeId,
                 'url' => $url,
                 'label' => $label,
             ];
         }
-
         return $links;
     }
 
